@@ -56,9 +56,15 @@ df_cleaned = df_cleaned.reset_index(drop=True)
 # Merge the cleaned data with the measures file
 merged_df = pd.merge(df_cleaned, measures_df, on='measure', how='left')
 
+# Function to create year-wise aggregated data
+def aggregate_by_year(data):
+    year_data = data.groupby('year')['value'].agg(['mean', 'count', list]).to_dict('index')
+    return {year: {'average': year_data[year]['mean'], 'count': year_data[year]['count'], 'values': year_data[year]['list']} for year in year_data}
+
 # Build the hierarchical JSON structure
 data_hierarchy = {
     "name": "Dataset",
+    "year_data": aggregate_by_year(merged_df),
     "children": []
 }
 
@@ -68,6 +74,7 @@ grouped_by_location = merged_df.groupby('location')
 for location, location_data in grouped_by_location:
     location_node = {
         "name": location,
+        "year_data": aggregate_by_year(location_data),
         "children": []
     }
     
@@ -76,18 +83,16 @@ for location, location_data in grouped_by_location:
     for toxicity, toxicity_data in grouped_by_toxicity:
         toxicity_node = {
             "name": toxicity,
+            "year_data": aggregate_by_year(toxicity_data),
             "children": []
         }
         
         # Group data by measure within each toxicity group
         grouped_by_measure = toxicity_data.groupby('measure')
         for measure, measure_data in grouped_by_measure:
-            # Create a dictionary of year and corresponding values
-            year_value_dict = measure_data.groupby('year')['value'].apply(list).to_dict()
-            
             measure_node = {
                 "name": measure,
-                "value": year_value_dict  # Dictionary with year as key and list of values as value
+                "year_data": aggregate_by_year(measure_data)
             }
             toxicity_node["children"].append(measure_node)
         
