@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radial Stacked Bar Graph</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f9f9f9;
+    }
+
+    svg {
+      background-color: white;
+      border-radius: 50%;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .tooltip {
+      position: absolute;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="chart"></div>
+  <script>
+    d3.json('../Data/data.json').then(data => {
+      const width = 800;
+      const height = 800;
+      const innerRadius = 150;
+      const outerRadius = Math.min(width, height) / 2;
+
+      // Flatten data for aggregation
+      const flatData = [];
+      const processNode = node => {
+        if (node.children) {
+          node.children.forEach(processNode);
+        }
+        if (node.year_data) {
+          Object.entries(node.year_data).forEach(([year, values]) => {
+            flatData.push({
+              location: node.name,
+              year: +year,
+              average: values.average || 0,
+            });
+          });
+        }
+      };
+      data.children.forEach(processNode);
+
+      // Group data by year and location
+      const nestedData = d3.groups(flatData, d => d.year, d => d.location);
+
+      // Prepare stacked data
+      const years = Array.from(new Set(flatData.map(d => d.year))).sort();
+      const locations = Array.from(new Set(flatData.map(d => d.location)));
+
+      const stackedData = nestedData.map(([year, locationsData]) => {
+        const yearData = {};
+        yearData.year = year;
+        locationsData.forEach(([location, values]) => {
+          yearData[location] = values[0]?.average || 0;
+        });
+        return yearData;
+      });
+
+      const stack = d3.stack()
+        .keys(locations)
+        .value((d, key) => d[key] || 0);
+
+      const series = stack(stackedData);
+
+      // Scales
+      const x = d3.scaleBand()
+        .domain(years)
+        .range([0, 2 * Math.PI])
+        .align(0);
+
+      const y = d3.scaleRadial()
+        .domain([0, d3.max(series, s => d3.max(s, d => d[1]))])
+        .range([innerRadius, outerRadius]);
+
+      const color = d3.scaleOrdinal()
+        .domain(locations)
+        .range(d3.schemeCategory10);
+
+      const arc = d3.arc()
+        .innerRadius(d => y(d[0]))
+        .outerRadius(d => y(d[1]))
+        .startAngle(d => x(d.data.year))
+        .endAngle(d => x(d.data.year) + x.bandwidth())
+        .padAngle(1 / innerRadius)
+        .padRadius(innerRadius);
+
+      const svg = d3.select('#chart')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height)
+        .attr('viewBox', [-width / 2, -height / 2, width, height]);
+
+      // Draw arcs
+      svg.append('g')
+        .selectAll('g')
+        .data(series)
+        .join('g')
+        .attr('fill', d => color(d.key))
+        .selectAll('path')
+        .data(d => d)
+        .join('path')
+        .attr('d', arc)
+        .append('title')
+        .text(d => `Year: ${d.data.year}\nLocation: ${d.key}\nAverage: ${d[1] - d[0]}`);
+
+      // Add year labels
+      svg.append('g')
+        .selectAll('text')
+        .data(years)
+        .join('text')
+        .attr('transform', d => `
+          rotate(${((x(d) + x.bandwidth() / 2) * 180 / Math.PI - 90)})
+          translate(${innerRadius - 10},0)
+        `)
+        .attr('text-anchor', 'middle')
+        .text(d => d);
+
+      // Add legend
+      svg.append('g')
+        .selectAll('g')
+        .data(locations)
+        .join('g')
+        .attr('transform', (d, i) => `translate(-${outerRadius + 20},${(i - locations.length / 2) * 20})`)
+        .call(g => g.append('rect')
+          .attr('width', 18)
+          .attr('height', 18)
+          .attr('fill', color))
+        .call(g => g.append('text')
+          .attr('x', 24)
+          .attr('y', 9)
+          .attr('dy', '0.35em')
+          .text(d => d));
+    });
+  </script>
+</body>
+</html>

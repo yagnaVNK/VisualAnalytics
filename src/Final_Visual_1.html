@@ -14,9 +14,10 @@
             text-align: center;
             padding: 5px;
             background: lightgray;
-            border: 1px solid black;
             border-radius: 5px;
             pointer-events: none;
+            stroke: white;
+            stroke-width: 1;
         }
         .label {
             font-family: Arial, sans-serif;
@@ -31,6 +32,7 @@
             left: 20px;
             z-index: 10;
         }
+        
     </style>
 </head>
 <body>
@@ -99,18 +101,22 @@
                     .enter().append("circle")
                     .attr("class", d => d.parent ? d.children ? "node" : "node node--leaf" : "node node--root")
                     .attr("fill", d => {
-                        if (d.depth === 0) return "#E8F5E9"; // Root node
-                        if (d.depth === 1) return "#A5D6A7"; // Level 1
-                        if (d.depth === 2) return "#66BB6A"; // Level 2
-                        if (d.depth === 3) return "#1B5E20"; // Level 3 (Leaf nodes)
+                        // if (d.depth === 0) return "#F1F8E8"; // Root node
+                        // if (d.depth === 1) return "#91DDCF"; // Level 1
+                        // if (d.depth === 2) return "#FFF2E1"; // Level 2
+                        // if (d.depth === 3) return "#FBFBFB"; // Level 3 (Leaf nodes)
+                        if (d.depth === 0) return "#E3FEF7"; // Root node
+                        if (d.depth === 1) return "#135D66"; // Level 1
+                        if (d.depth === 2) return "#77B0AA"; // Level 2
+                        if (d.depth === 3) return "#FBFBFB"; // Level 3 (Leaf nodes)
                         return "#FFF"; // Default fallback
                     })
-                    .attr("stroke", "#000")
-                    .attr("stroke-width", 1)
+                    // .attr("stroke", "#000")
+                    // .attr("stroke-width", 1)
                     .on("mouseover", function(event, d) {
-                        d3.select(this)
-                            .attr("stroke", "#333")
-                            .attr("stroke-width", 2);
+                        // d3.select(this)
+                        //     .attr("stroke", "#333")
+                        //     .attr("stroke-width", 2);
 
                         const averageValue = d.data.year_data?.[year]?.average !== undefined 
                             ? d.data.year_data[year].average.toFixed(2) 
@@ -127,8 +133,8 @@
                     })
                     .on("mouseout", function() {
                         d3.select(this)
-                            .attr("stroke", "#000")
-                            .attr("stroke-width", 1); 
+                            // .attr("stroke", "#000")
+                            // .attr("stroke-width", 1); 
 
                         tooltip.style("visibility", "hidden");
                     })
@@ -156,7 +162,11 @@
                     .style("fill-opacity", 0)
                     .transition().duration(750)
                     .style("fill-opacity", 1)
-                    .style("fill", "lightgray")
+                    .style("fill", "black") 
+                    .attr("stroke", "black")
+                    .attr("stroke-width", 0.75)
+                    
+
                     .attr("transform", d => `translate(${d.x},${d.y})`)
                     .text(d => d.data.name);
 
