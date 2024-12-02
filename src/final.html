@@ -6,6 +6,9 @@
     <title>D3 Packed Circles with Year Filter</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
+        .body{
+            background-color: #262b2c;
+        }
         .tooltip {
             position: absolute;
             text-align: center;
@@ -39,25 +42,25 @@
     <script>
         d3.json('../Data/data.json').then(data => {
             document.getElementById("loading").style.display = "none";
-
+    
             const width = window.innerWidth;
             const height = window.innerHeight;
-
+    
             const svg = d3.select("body").append("svg")
                 .attr("width", width)
                 .attr("height", height);
-
+    
             const tooltip = d3.select("body").append("div")
                 .attr("class", "tooltip")
                 .style("visibility", "hidden");
-
+    
             const pack = d3.pack()
                 .size([width, height])
                 .padding(3);
-
+    
             let focus, view;
-            
-            // Add year filter functionality
+            let text; // Define `text` in a broader scope
+    
             const years = new Set();
             data.children.forEach(location => {
                 location.children.forEach(toxicity => {
@@ -66,19 +69,19 @@
                     });
                 });
             });
-
+    
             const uniqueYears = [...years].sort((a, b) => a - b);
-
+    
             const yearSelect = d3.select("#year");
             uniqueYears.forEach(year => {
                 yearSelect.append("option").attr("value", year).text(year);
             });
-
+    
             yearSelect.on("change", function() {
                 const selectedYear = this.value;
                 updateYearFilter(selectedYear);
             });
-
+    
             function updateYearFilter(year) {
                 const filteredData = d3.hierarchy(filterDataByYear(data, year))
                     .sum(d => d.value ? d.value : d.children ? d.children.length : 0);
@@ -95,20 +98,43 @@
                     .data(nodes)
                     .enter().append("circle")
                     .attr("class", d => d.parent ? d.children ? "node" : "node node--leaf" : "node node--root")
-                    .attr("fill", d => d.depth === 1 ? "#F4A3BC" : d.depth === 2 ? "#A3C4F4" : d.depth === 3 ? "#BCD7F4" : "#FFF")
+                    .attr("fill", d => {
+                        if (d.depth === 0) return "#E8F5E9"; // Root node
+                        if (d.depth === 1) return "#A5D6A7"; // Level 1
+                        if (d.depth === 2) return "#66BB6A"; // Level 2
+                        if (d.depth === 3) return "#1B5E20"; // Level 3 (Leaf nodes)
+                        return "#FFF"; // Default fallback
+                    })
                     .attr("stroke", "#000")
                     .attr("stroke-width", 1)
                     .on("mouseover", function(event, d) {
-                        const averageValue = d.data.value ? d.data.value.toFixed(2) : 'N/A';
+                        d3.select(this)
+                            .attr("stroke", "#333")
+                            .attr("stroke-width", 2);
+
+                        const averageValue = d.data.year_data?.[year]?.average !== undefined 
+                            ? d.data.year_data[year].average.toFixed(2) 
+                            : 'N/A';
+                        const totalCount = d.data.year_data?.[year]?.count || 'N/A';
                         tooltip.style("visibility", "visible")
-                               .text(`${d.data.name}: ${averageValue}`);
+                            .html(`
+                                <div>
+                                    <strong>Name:</strong> ${d.data.name || 'N/A'}<br>
+                                    <strong>Average Value:</strong> ${averageValue}<br>
+                                    <strong>Total Count:</strong> ${totalCount}
+                                </div>
+                            `);
+                    })
+                    .on("mouseout", function() {
+                        d3.select(this)
+                            .attr("stroke", "#000")
+                            .attr("stroke-width", 1); 
+
+                        tooltip.style("visibility", "hidden");
                     })
                     .on("mousemove", function(event) {
                         tooltip.style("top", (event.pageY - 10) + "px")
-                               .style("left", (event.pageX + 10) + "px");
-                    })
-                    .on("mouseout", function() {
-                        tooltip.style("visibility", "hidden");
+                            .style("left", (event.pageX + 10) + "px");
                     })
                     .on("click", function(event, d) {
                         if (focus !== d) {
@@ -117,20 +143,31 @@
                         }
                     });
 
-                const text = svg.selectAll("text")
-                    .data(nodes)
+                // Transition circle positions and sizes
+                // circle.transition().duration(750)
+                //     .attr("transform", d => `translate(${d.x},${d.y})`)
+                //     .attr("r", d => d.r);
+
+                // Add labels only for toxicity and measure levels
+                svg.selectAll("text")
+                    .data(nodes.filter(d => d.depth === 1)) // Hide location labels
                     .enter().append("text")
                     .attr("class", "label")
-                    .style("fill-opacity", d => d.parent === filteredData ? 1 : 0)
-                    .style("display", d => d.parent === filteredData ? "inline" : "none")
+                    .style("fill-opacity", 0)
+                    .transition().duration(750)
+                    .style("fill-opacity", 1)
+                    .style("fill", "lightgray")
+                    .attr("transform", d => `translate(${d.x},${d.y})`)
                     .text(d => d.data.name);
 
                 zoomTo([filteredData.x, filteredData.y, filteredData.r * 2]);
-            }
+}
 
+
+    
             function filterDataByYear(data, year) {
                 const filteredData = JSON.parse(JSON.stringify(data)); // Deep copy the data
-                
+    
                 filteredData.children.forEach(location => {
                     location.children.forEach(toxicity => {
                         toxicity.children.forEach(measure => {
@@ -141,10 +178,10 @@
                     location.children = location.children.filter(toxicity => toxicity.children.length > 0);
                 });
                 filteredData.children = filteredData.children.filter(location => location.children.length > 0);
-
+    
                 return filteredData;
             }
-
+    
             function zoom(event, d) {
                 focus = d;
 
@@ -155,7 +192,9 @@
                         return t => zoomTo(i(t));
                     });
 
-                text.transition(transition)
+                // Transition text visibility based on focus
+                svg.selectAll("text")
+                    .transition(transition)
                     .style("fill-opacity", function(d) { return d.parent === focus ? 1 : 0; })
                     .on("start", function(d) { if (d.parent === focus) d3.select(this).style("display", "inline"); })
                     .on("end", function(d) { if (d.parent !== focus) d3.select(this).style("display", "none"); });
@@ -167,18 +206,19 @@
                 svg.selectAll("circle").attr("transform", d => `translate(${(d.x - v[0]) * k + width / 2},${(d.y - v[1]) * k + height / 2})`);
                 svg.selectAll("circle").attr("r", d => d.r * k);
             }
-
+    
             const root = d3.hierarchy(data)
                 .sum(d => d.value ? d.value : d.children ? d.children.length : 0);
-
+    
             const nodes = pack(root).descendants();
             focus = root;
             view = [root.x, root.y, root.r * 2];
-
+    
             updateYearFilter(uniqueYears[0]); // Load initial data
         }).catch(error => {
             console.error("Error loading JSON data:", error);
         });
     </script>
+    
 </body>
 </html>
