@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3 Packed Circles with Year Filter</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 5px;
+            background: lightgray;
+            border: 1px solid black;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+        .label {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            fill: #000;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+        #year-filter {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="year-filter">
+        <label for="year">Select Year: </label>
+        <select id="year"></select>
+    </div>
+    <div id="loading">Loading data...</div>
+    <script>
+        d3.json('../Data/data.json').then(data => {
+            document.getElementById("loading").style.display = "none";
+
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            const svg = d3.select("body").append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("visibility", "hidden");
+
+            const root = d3.hierarchy(data)
+                .sum(d => d.value ? d3.sum(Object.values(d.value)) : (d.children ? d.children.length : 0));
+
+            const pack = d3.pack()
+                .size([width, height])
+                .padding(3);
+
+            let nodes = pack(root).descendants();
+
+            let focus = root;
+            let view;
+
+            const circle = svg.selectAll("circle")
+                .data(nodes)
+                .enter().append("circle")
+                .attr("class", d => d.parent ? d.children ? "node" : "node node--leaf" : "node node--root")
+                .attr("fill", d => d.depth === 1 ? "#F4A3BC" : d.depth === 2 ? "#A3C4F4" : d.depth === 3 ? "#BCD7F4" : "#FFF")
+                .attr("stroke", "#000")
+                .attr("stroke-width", 1)
+                .on("mouseover", function(event, d) {
+                    const averageValue = d.children && d.children.length > 0
+                        ? d3.mean(d.children, child => child.value)
+                        : d.value;
+                    tooltip.style("visibility", "visible")
+                           .text(`${d.data.name}: ${averageValue ? averageValue.toFixed(2) : 'N/A'}`);
+                })
+                .on("mousemove", function(event) {
+                    tooltip.style("top", (event.pageY - 10) + "px")
+                           .style("left", (event.pageX + 10) + "px");
+                })
+                .on("mouseout", function() {
+                    tooltip.style("visibility", "hidden");
+                })
+                .on("click", function(event, d) {
+                    if (focus !== d) {
+                        zoom(event, d);
+                        event.stopPropagation();
+                    }
+                });
+
+            const text = svg.selectAll("text")
+                .data(nodes)
+                .enter().append("text")
+                .attr("class", "label")
+                .style("fill-opacity", d => d.parent === root ? 1 : 0)
+                .style("display", d => d.parent === root ? "inline" : "none")
+                .text(d => d.data.name);
+
+            const node = svg.selectAll("circle,text");
+
+            svg.style("background", "#FFF")
+                .on("click", function() { zoom(null, root); });
+
+            zoomTo([root.x, root.y, root.r * 2]);
+
+            // Add year filter functionality
+            const years = new Set();
+            data.children.forEach(location => {
+                location.children.forEach(toxicity => {
+                    toxicity.children.forEach(measure => {
+                        Object.keys(measure.value).forEach(year => years.add(year));
+                    });
+                });
+            });
+            const uniqueYears = [...years].sort((a, b) => a - b);
+
+            const yearSelect = d3.select("#year");
+            uniqueYears.forEach(year => {
+                yearSelect.append("option").attr("value", year).text(year);
+            });
+
+            yearSelect.on("change", function() {
+                const selectedYear = this.value;
+                updateYearFilter(selectedYear);
+            });
+
+            function updateYearFilter(year) {
+                const filteredData = d3.hierarchy(filterDataByYear(data, year))
+                    .sum(d => d.value ? d3.sum(Object.values(d.value)) : (d.children ? d.children.length : 0));
+
+                nodes = pack(filteredData).descendants();
+
+                svg.selectAll("circle").remove();
+                svg.selectAll("text").remove();
+
+                focus = filteredData;
+                view = [filteredData.x, filteredData.y, filteredData.r * 2];
+
+                svg.selectAll("circle")
+                    .data(nodes)
+                    .enter().append("circle")
+                    .attr("class", d => d.parent ? d.children ? "node" : "node node--leaf" : "node node--root")
+                    .attr("fill", d => d.depth === 1 ? "#F4A3BC" : d.depth === 2 ? "#A3C4F4" : d.depth === 3 ? "#BCD7F4" : "#FFF")
+                    .attr("stroke", "#000")
+                    .attr("stroke-width", 1)
+                    .on("mouseover", function(event, d) {
+                        const averageValue = d.children && d.children.length > 0
+                            ? d3.mean(d.children, child => child.value)
+                            : d.value;
+                        tooltip.style("visibility", "visible")
+                               .text(`${d.data.name}: ${averageValue ? averageValue.toFixed(2) : 'N/A'}`);
+                    })
+                    .on("mousemove", function(event) {
+                        tooltip.style("top", (event.pageY - 10) + "px")
+                               .style("left", (event.pageX + 10) + "px");
+                    })
+                    .on("mouseout", function() {
+                        tooltip.style("visibility", "hidden");
+                    })
+                    .on("click", function(event, d) {
+                        if (focus !== d) {
+                            zoom(event, d);
+                            event.stopPropagation();
+                        }
+                    });
+
+                svg.selectAll("text")
+                    .data(nodes)
+                    .enter().append("text")
+                    .attr("class", "label")
+                    .style("fill-opacity", d => d.parent === filteredData ? 1 : 0)
+                    .style("display", d => d.parent === filteredData ? "inline" : "none")
+                    .text(d => d.data.name);
+
+                zoomTo([filteredData.x, filteredData.y, filteredData.r * 2]);
+            }
+
+            function filterDataByYear(data, year) {
+                const filteredData = JSON.parse(JSON.stringify(data));
+                filteredData.children.forEach(location => {
+                    location.children.forEach(toxicity => {
+                        toxicity.children.forEach(measure => {
+                            measure.value = measure.value[year] ? d3.mean(measure.value[year]) : null;
+                        });
+                        toxicity.children = toxicity.children.filter(measure => measure.value !== null);
+                    });
+                    location.children = location.children.filter(toxicity => toxicity.children.length > 0);
+                });
+                filteredData.children = filteredData.children.filter(location => location.children.length > 0);
+                return filteredData;
+            }
+
+            function zoom(event, d) {
+                focus = d;
+
+                const transition = svg.transition()
+                    .duration(750)
+                    .tween("zoom", d => {
+                        const i = d3.interpolateZoom(view, [focus.x, focus.y, focus.r * 2]);
+                        return t => zoomTo(i(t));
+                    });
+
+                text.transition(transition)
+                    .style("fill-opacity", function(d) { return d.parent === focus ? 1 : 0; })
+                    .on("start", function(d) { if (d.parent === focus) d3.select(this).style("display", "inline"); })
+                    .on("end", function(d) { if (d.parent !== focus) d3.select(this).style("display", "none"); });
+            }
+
+            function zoomTo(v) {
+                const k = Math.min(width, height) / v[2];
+                view = v;
+                node.attr("transform", d => `translate(${(d.x - v[0]) * k + width / 2},${(d.y - v[1]) * k + height / 2})`);
+                circle.attr("r", d => d.r * k);
+            }
+        }).catch(error => {
+            console.error("Error loading JSON data:", error);
+        });
+    </script>
+</body>
+</html>
