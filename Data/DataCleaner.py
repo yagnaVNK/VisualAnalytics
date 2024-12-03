@@ -90,8 +90,12 @@ for location, location_data in grouped_by_location:
         # Group data by measure within each toxicity group
         grouped_by_measure = toxicity_data.groupby('measure')
         for measure, measure_data in grouped_by_measure:
+            # Retrieve the unit for the current measure
+            unit = measure_data['unit'].iloc[0] if 'unit' in measure_data.columns else None
+
             measure_node = {
                 "name": measure,
+                "unit": unit,  # Add unit here
                 "year_data": aggregate_by_year(measure_data)
             }
             toxicity_node["children"].append(measure_node)

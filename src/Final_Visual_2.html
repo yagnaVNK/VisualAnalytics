@@ -1,157 +1,304 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Radial Stacked Bar Graph</title>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      background-color: #f9f9f9;
-    }
+    <meta charset="UTF-8">
+    <title>D3 Circle and Stacked Bars with Measure Filter</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        #measure-filter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            font-family: Arial, sans-serif;
+        }
 
-    svg {
-      background-color: white;
-      border-radius: 50%;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
+        #measure-filter label {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-right: 10px;
+        }
 
-    .tooltip {
-      position: absolute;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      border-radius: 4px;
-      font-size: 12px;
-      pointer-events: none;
-      visibility: hidden;
-    }
-  </style>
+        #measure-filter select {
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            outline: none;
+            background-color: #f9f9f9;
+            transition: all 0.3s ease;
+        }
+
+        #measure-filter select:hover {
+            border-color: #007BFF;
+        }
+
+        #measure-filter select:focus {
+            border-color: #007BFF;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        #measure-filter select option {
+            padding: 8px;
+            background-color: #fff;
+        }
+
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 5px;
+            background: lightgray;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+
+        .legend {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
 </head>
 <body>
-  <div id="chart"></div>
-  <script>
-    d3.json('../Data/data.json').then(data => {
-      const width = 800;
-      const height = 800;
-      const innerRadius = 150;
-      const outerRadius = Math.min(width, height) / 2;
+    <div id="measure-filter">
+        <label for="filter-measure">Filter by Measure:</label>
+        <select id="filter-measure">
+            <option value="all">All Measures</option>
+        </select>
+    </div>
 
-      // Flatten data for aggregation
-      const flatData = [];
-      const processNode = node => {
-        if (node.children) {
-          node.children.forEach(processNode);
+    <svg></svg>
+
+    <script>
+        function roundToTwo(value) {
+            return Math.round(value * 100) / 100;
         }
-        if (node.year_data) {
-          Object.entries(node.year_data).forEach(([year, values]) => {
-            flatData.push({
-              location: node.name,
-              year: +year,
-              average: values.average || 0,
+
+        function fitToScreen(svg, containerWidth, containerHeight) {
+            const maxDimension = Math.min(containerWidth, containerHeight);
+
+            svg.attr("viewBox", [-maxDimension / 2, -maxDimension / 2, maxDimension, maxDimension])
+               .attr("width", maxDimension)
+               .attr("height", maxDimension);
+        }
+
+        d3.json("../Data/data.json").then(data => {
+
+            function getUnitsByMeasure(data) {
+                const unitsMap = {};
+                data.children.forEach(location => {
+                    location.children.forEach(toxicity => {
+                        toxicity.children.forEach(measure => {
+                            if (measure.name && measure.unit) {
+                                unitsMap[measure.name] = measure.unit;
+                            }
+                        });
+                    });
+                });
+                return unitsMap;
+            }
+
+            const unitsByMeasure = getUnitsByMeasure(data);
+            const container = d3.select("svg");
+            const containerWidth = window.innerWidth * 0.9;
+            const containerHeight = window.innerHeight * 0.9;
+            fitToScreen(container, containerWidth, containerHeight);
+
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("visibility", "hidden");
+
+            const innerRadius = containerHeight / 6;
+            const outerRadius = containerHeight / 2.5;
+
+            const measures = [...new Set(data.children.flatMap(location => 
+                location.children.flatMap(toxicity => 
+                    toxicity.children.map(measure => measure.name)
+                )
+            ))];
+
+            const dropdown = d3.select("#filter-measure");
+            measures.forEach(measure => {
+                dropdown.append("option")
+                    .attr("value", measure)
+                    .text(measure);
             });
-          });
-        }
-      };
-      data.children.forEach(processNode);
 
-      // Group data by year and location
-      const nestedData = d3.groups(flatData, d => d.year, d => d.location);
+            dropdown.on("change", function () {
+                const selectedMeasure = this.value;
+                updateVisualization(selectedMeasure);
+            });
 
-      // Prepare stacked data
-      const years = Array.from(new Set(flatData.map(d => d.year))).sort();
-      const locations = Array.from(new Set(flatData.map(d => d.location)));
+            function prepareYearData(selectedMeasure) {
+                return Object.keys(data.year_data).map(year => ({
+                    year: year,
+                    values: data.children.map(location => ({
+                        location: location.name,
+                        value: location.year_data[year]
+                            ? roundToTwo(
+                                selectedMeasure === "all"
+                                    ? location.year_data[year].average
+                                    : location.children.flatMap(toxicity =>
+                                        toxicity.children.filter(m => m.name === selectedMeasure)
+                                    ).reduce((sum, m) => sum + (m.year_data[year]?.average || 0), 0)
+                              )
+                            : 0
+                    }))
+                }));
+            }
 
-      const stackedData = nestedData.map(([year, locationsData]) => {
-        const yearData = {};
-        yearData.year = year;
-        locationsData.forEach(([location, values]) => {
-          yearData[location] = values[0]?.average || 0;
+            function updateVisualization(selectedMeasure) {
+                container.selectAll("*").remove();
+
+                const yearData = prepareYearData(selectedMeasure);
+                const seriesKeys = data.children.map(location => location.name);
+
+                const series = d3.stack()
+                    .keys(seriesKeys)
+                    .value((d, key) => d.values.find(v => v.location === key).value)
+                    (yearData);
+
+                const x = d3.scaleBand()
+                    .domain(yearData.map(d => d.year))
+                    .range([0, 2 * Math.PI])
+                    .align(0);
+
+                const y = d3.scaleRadial()
+                    .domain([0, d3.max(series, d => d3.max(d, d => d[1]))])
+                    .range([innerRadius, outerRadius]);
+
+                const color = d3.scaleOrdinal()
+                    .domain(seriesKeys)
+                    .range(d3.schemeSpectral[seriesKeys.length])
+                    .unknown("#ccc");
+
+                const arc = d3.arc()
+                    .innerRadius(d => y(d[0]))
+                    .outerRadius(d => y(d[1]))
+                    .startAngle(d => x(d.data.year))
+                    .endAngle(d => x(d.data.year) + x.bandwidth())
+                    .padAngle(1.5 / innerRadius)
+                    .padRadius(innerRadius);
+
+                const pathGroup = container.append("g")
+                    .selectAll("g")
+                    .data(series)
+                    .join("g")
+                        .attr("fill", d => color(d.key))
+                    .selectAll("path")
+                    .data(D => D.map(d => (d.key = D.key, d)));
+
+                pathGroup
+                    .join("path")
+                    .transition() // Apply smooth transition
+                    .duration(1000)
+                    .attrTween("d", function(d) {
+                        const i = d3.interpolate(
+                            { startAngle: x(d.data.year), endAngle: x(d.data.year) },
+                            { startAngle: x(d.data.year), endAngle: x(d.data.year) + x.bandwidth() }
+                        );
+                        return t => arc({
+                            ...d,
+                            startAngle: i(t).startAngle,
+                            endAngle: i(t).endAngle
+                        });
+                    })
+                    .on("end", function() {
+                        d3.select(this)
+                            .on("mouseover", function(event, d) {
+                                const locationName = d.key;
+                                const value = d.data.values.find(v => v.location === locationName)?.value || 0;
+                                const unit = unitsByMeasure[selectedMeasure] || "N/A";
+                                tooltip.style("visibility", "visible")
+                                    .html(`
+                                        <strong>Location:</strong> ${locationName}<br>
+                                        <strong>Value:</strong> ${value} ${unit}
+                                    `);
+                            })
+                            .on("mousemove", function(event) {
+                                tooltip.style("top", (event.pageY - 10) + "px")
+                                    .style("left", (event.pageX + 10) + "px");
+                            })
+                            .on("mouseout", function() {
+                                tooltip.style("visibility", "hidden");
+                            });
+                    });
+
+                container.append("g")
+                    .attr("text-anchor", "middle")
+                    .selectAll("g")
+                    .data(x.domain())
+                    .join("g")
+                        .attr("transform", d => `
+                            rotate(${((x(d) + x.bandwidth() / 2) * 180 / Math.PI - 90)})
+                            translate(${innerRadius},0)
+                        `)
+                        .call(g => g.append("line")
+                            .attr("x2", -5)
+                            .attr("stroke", "#000"))
+                        .call(g => g.append("text")
+                            .attr("transform", d => (x(d) + x.bandwidth() / 2 + Math.PI / 2) % (2 * Math.PI) < Math.PI
+                                ? "rotate(90)translate(0,16)"
+                                : "rotate(-90)translate(0,-9)")
+                            .text(d => d));
+
+                container.append("g")
+                    .attr("text-anchor", "middle")
+                    .call(g => g.append("text")
+                        .attr("y", d => -y(y.ticks(5).pop()))
+                        .attr("dy", "-1em")
+                        .text("Average Measure Value"))
+                    .call(g => g.selectAll("g")
+                        .data(y.ticks(5).slice(1))
+                        .join("g")
+                            .attr("fill", "none")
+                            .call(g => g.append("circle")
+                                .attr("stroke", "#000")
+                                .attr("stroke-opacity", 0.5)
+                                .attr("r", y))
+                            .call(g => g.append("text")
+                                .attr("y", d => -y(d))
+                                .attr("dy", "0.35em")
+                                .attr("stroke", "#fff")
+                                .attr("stroke-width", 5)
+                                .text(y.tickFormat(5, "s"))
+                            .clone(true)
+                                .attr("fill", "#000")
+                                .attr("stroke", "none")));
+
+                // Add legend in the center
+                const legend = container.append("g")
+                    .attr("class", "legend")
+                    .attr("transform", `translate(0, 0)`);
+
+                seriesKeys.forEach((key, i) => {
+                    legend.append("rect")
+                        .attr("x", -60)
+                        .attr("y", i * 20 - (seriesKeys.length * 10))
+                        .attr("width", 18)
+                        .attr("height", 18)
+                        .attr("fill", color(key));
+
+                    legend.append("text")
+                        .attr("x", -36)
+                        .attr("y", i * 20 + 9 - (seriesKeys.length * 10))
+                        .attr("dy", "0.35em")
+                        .text(key);
+                });
+            }
+
+            updateVisualization("all");
+        }).catch(error => {
+            console.error("Error loading data: ", error);
         });
-        return yearData;
-      });
-
-      const stack = d3.stack()
-        .keys(locations)
-        .value((d, key) => d[key] || 0);
-
-      const series = stack(stackedData);
-
-      // Scales
-      const x = d3.scaleBand()
-        .domain(years)
-        .range([0, 2 * Math.PI])
-        .align(0);
-
-      const y = d3.scaleRadial()
-        .domain([0, d3.max(series, s => d3.max(s, d => d[1]))])
-        .range([innerRadius, outerRadius]);
-
-      const color = d3.scaleOrdinal()
-        .domain(locations)
-        .range(d3.schemeCategory10);
-
-      const arc = d3.arc()
-        .innerRadius(d => y(d[0]))
-        .outerRadius(d => y(d[1]))
-        .startAngle(d => x(d.data.year))
-        .endAngle(d => x(d.data.year) + x.bandwidth())
-        .padAngle(1 / innerRadius)
-        .padRadius(innerRadius);
-
-      const svg = d3.select('#chart')
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height)
-        .attr('viewBox', [-width / 2, -height / 2, width, height]);
-
-      // Draw arcs
-      svg.append('g')
-        .selectAll('g')
-        .data(series)
-        .join('g')
-        .attr('fill', d => color(d.key))
-        .selectAll('path')
-        .data(d => d)
-        .join('path')
-        .attr('d', arc)
-        .append('title')
-        .text(d => `Year: ${d.data.year}\nLocation: ${d.key}\nAverage: ${d[1] - d[0]}`);
-
-      // Add year labels
-      svg.append('g')
-        .selectAll('text')
-        .data(years)
-        .join('text')
-        .attr('transform', d => `
-          rotate(${((x(d) + x.bandwidth() / 2) * 180 / Math.PI - 90)})
-          translate(${innerRadius - 10},0)
-        `)
-        .attr('text-anchor', 'middle')
-        .text(d => d);
-
-      // Add legend
-      svg.append('g')
-        .selectAll('g')
-        .data(locations)
-        .join('g')
-        .attr('transform', (d, i) => `translate(-${outerRadius + 20},${(i - locations.length / 2) * 20})`)
-        .call(g => g.append('rect')
-          .attr('width', 18)
-          .attr('height', 18)
-          .attr('fill', color))
-        .call(g => g.append('text')
-          .attr('x', 24)
-          .attr('y', 9)
-          .attr('dy', '0.35em')
-          .text(d => d));
-    });
-  </script>
+    </script>
 </body>
 </html>

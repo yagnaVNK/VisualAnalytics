@@ -3,48 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>D3 Packed Circles with Year Filter</title>
+    <title>D3 Packed Circles with Unit of Measure</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         #year-filter {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 20px 0;
-        font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            font-family: Arial, sans-serif;
         }
 
         #year-filter label {
-        font-size: 16px;
-        font-weight: bold;
-        color: #333;
-        margin-right: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-right: 10px;
         }
 
         #year-filter select {
-        padding: 8px 12px;
-        font-size: 14px;
-        font-family: Arial, sans-serif;
-        color: #333;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        outline: none;
-        background-color: #f9f9f9;
-        transition: all 0.3s ease;
+            padding: 8px 12px;
+            font-size: 14px;
+            font-family: Arial, sans-serif;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            outline: none;
+            background-color: #f9f9f9;
+            transition: all 0.3s ease;
         }
 
         #year-filter select:hover {
-        border-color: #007BFF;
+            border-color: #007BFF;
         }
 
         #year-filter select:focus {
-        border-color: #007BFF;
-        box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+            border-color: #007BFF;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
         }
 
         #year-filter select option {
-        padding: 8px;
-        background-color: #fff;
+            padding: 8px;
+            background-color: #fff;
         }
 
         .tooltip {
@@ -54,54 +54,63 @@
             background: lightgray;
             border-radius: 5px;
             pointer-events: none;
-            stroke: white;
-            stroke-width: 1;
         }
+
         .label {
             font-family: Arial, sans-serif;
-            font-size: 12px;
-            fill: #000;
+            font-size: 16px;
+            font-weight: bold;
             text-anchor: middle;
-            pointer-events: none;
+            stroke: #000;
+            stroke-width: 0.5;
         }
-        #year-filter {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
+
+        .leaf-label {
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            font-weight: bold;
+            text-anchor: middle;
+            stroke: #000;
+            stroke-width: 0.75;
+            fill: #000;
         }
-        
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #FBFBFB;
+        }
     </style>
 </head>
 <body>
     <div id="year-filter">
-        <label for="year">Select Year: </label>
+        <label for="year">Select Year:</label>
         <select id="year"></select>
     </div>
     <div id="loading">Loading data...</div>
+
     <script>
         d3.json('../Data/data.json').then(data => {
             document.getElementById("loading").style.display = "none";
-    
+
             const width = window.innerWidth;
             const height = window.innerHeight;
-    
+
             const svg = d3.select("body").append("svg")
                 .attr("width", width)
-                .attr("height", height)
-                .style("background","#FBFBFB");
-    
+                .attr("height", height);
+
             const tooltip = d3.select("body").append("div")
                 .attr("class", "tooltip")
                 .style("visibility", "hidden");
-    
+
             const pack = d3.pack()
                 .size([width, height])
                 .padding(3);
-    
+
             let focus, view;
-            let text; // Define `text` in a broader scope
-    
+
             const years = new Set();
             data.children.forEach(location => {
                 location.children.forEach(toxicity => {
@@ -110,22 +119,22 @@
                     });
                 });
             });
-    
+
             const uniqueYears = [...years].sort((a, b) => a - b);
-    
+
             const yearSelect = d3.select("#year");
             uniqueYears.forEach(year => {
                 yearSelect.append("option").attr("value", year).text(year);
             });
-    
+
             yearSelect.on("change", function() {
                 const selectedYear = this.value;
                 updateYearFilter(selectedYear);
             });
-    
+
             function updateYearFilter(year) {
                 const filteredData = d3.hierarchy(filterDataByYear(data, year))
-                    .sum(d => d.value ? d.value : d.children ? d.children.length : 0);
+                    .sum(d => d.value || 0);
 
                 const nodes = pack(filteredData).descendants();
 
@@ -140,41 +149,25 @@
                     .enter().append("circle")
                     .attr("class", d => d.parent ? d.children ? "node" : "node node--leaf" : "node node--root")
                     .attr("fill", d => {
-                        // if (d.depth === 0) return "#F1F8E8"; // Root node
-                        // if (d.depth === 1) return "#91DDCF"; // Level 1
-                        // if (d.depth === 2) return "#FFF2E1"; // Level 2
-                        // if (d.depth === 3) return "#FBFBFB"; // Level 3 (Leaf nodes)
                         if (d.depth === 0) return "#E3FEF7"; // Root node
                         if (d.depth === 1) return "#135D66"; // Level 1
                         if (d.depth === 2) return "#77B0AA"; // Level 2
-                        if (d.depth === 3) return "#D8D9DA"; // Level 3 (Leaf nodes)
-                        return "#FFF"; // Default fallback
+                        if (d.depth === 3) return "#D8D9DA"; // Leaf nodes
+                        return "#FFF";
                     })
-                    // .attr("stroke", "#000")
-                    // .attr("stroke-width", 1)
                     .on("mouseover", function(event, d) {
-                        // d3.select(this)
-                        //     .attr("stroke", "#333")
-                        //     .attr("stroke-width", 2);
+                        const count = d.data.year_data?.[year]?.count || 0;
+                        const avg = d.data.year_data?.[year]?.average || "N/A";
+                        const unit = d.data.unit || "N/A";
 
-                        const averageValue = d.data.year_data?.[year]?.average !== undefined 
-                            ? d.data.year_data[year].average.toFixed(2) 
-                            : 'N/A';
-                        const totalCount = d.data.year_data?.[year]?.count || 'N/A';
                         tooltip.style("visibility", "visible")
                             .html(`
-                                <div>
-                                    <strong>Name:</strong> ${d.data.name || 'N/A'}<br>
-                                    <strong>Average Value:</strong> ${averageValue}<br>
-                                    <strong>Total Count:</strong> ${totalCount}
-                                </div>
+                                <strong>Name:</strong> ${d.data.name || 'N/A'}<br>
+                                <strong>Avg:</strong> ${avg !== "N/A" ? avg.toFixed(2) : "N/A"} <strong>Units:</strong>: ${unit}<br>
+                                <strong>Count:</strong> ${count}
                             `);
                     })
                     .on("mouseout", function() {
-                        d3.select(this)
-                            // .attr("stroke", "#000")
-                            // .attr("stroke-width", 1); 
-
                         tooltip.style("visibility", "hidden");
                     })
                     .on("mousemove", function(event) {
@@ -188,49 +181,27 @@
                         }
                     });
 
-                // Transition circle positions and sizes
-                // circle.transition().duration(750)
-                //     .attr("transform", d => `translate(${d.x},${d.y})`)
-                //     .attr("r", d => d.r);
-
-                // Add labels only for toxicity and measure levels
-                svg.selectAll("text")
-                    .data(nodes.filter(d => d.depth === 1)) // Hide location labels
-                    .enter().append("text")
-                    .attr("class", "label")
-                    .style("fill-opacity", 0)
-                    .transition().duration(750)
-                    .style("fill-opacity", 1)
-                    .style("fill", "black") 
-                    .attr("stroke", "black")
-                    .attr("stroke-width", 0.75)
-                    
-
-                    .attr("transform", d => `translate(${d.x},${d.y})`)
-                    .text(d => d.data.name);
-
+                addLabels(nodes, year);
                 zoomTo([filteredData.x, filteredData.y, filteredData.r * 2]);
-}
+            }
 
-
-    
             function filterDataByYear(data, year) {
-                const filteredData = JSON.parse(JSON.stringify(data)); // Deep copy the data
-    
+                const filteredData = JSON.parse(JSON.stringify(data)); 
+
                 filteredData.children.forEach(location => {
                     location.children.forEach(toxicity => {
                         toxicity.children.forEach(measure => {
-                            measure.value = measure.year_data[year] ? measure.year_data[year].average : null;
+                            measure.value = measure.year_data[year] ? measure.year_data[year].count : null;
                         });
                         toxicity.children = toxicity.children.filter(measure => measure.value !== null);
                     });
                     location.children = location.children.filter(toxicity => toxicity.children.length > 0);
                 });
                 filteredData.children = filteredData.children.filter(location => location.children.length > 0);
-    
+
                 return filteredData;
             }
-    
+
             function zoom(event, d) {
                 focus = d;
 
@@ -241,33 +212,75 @@
                         return t => zoomTo(i(t));
                     });
 
-                // Transition text visibility based on focus
-                svg.selectAll("text")
+                svg.selectAll("text.label")
                     .transition(transition)
-                    .style("fill-opacity", function(d) { return d.parent === focus ? 1 : 0; })
-                    .on("start", function(d) { if (d.parent === focus) d3.select(this).style("display", "inline"); })
-                    .on("end", function(d) { if (d.parent !== focus) d3.select(this).style("display", "none"); });
+                    .style("fill-opacity", node => (node.parent === focus || node === focus) ? 1 : 0)
+                    .on("start", function(node) {
+                        if (node.parent === focus || node === focus) {
+                            d3.select(this).style("display", "inline");
+                        }
+                    })
+                    .on("end", function(node) {
+                        if (node.parent !== focus && node !== focus) {
+                            d3.select(this).style("display", "none");
+                        }
+                    });
+
+                svg.selectAll("text.leaf-label")
+                    .transition(transition)
+                    .style("fill-opacity", node => (node.depth === 3 && node === focus) ? 1 : 0)
+                    .on("start", function(node) {
+                        if (node.depth === 3 && node === focus) {
+                            d3.select(this).style("display", "inline");
+                        }
+                    })
+                    .on("end", function(node) {
+                        if (node.depth !== 3 || node !== focus) {
+                            d3.select(this).style("display", "none");
+                        }
+                    });
             }
 
             function zoomTo(v) {
                 const k = Math.min(width, height) / v[2];
                 view = v;
-                svg.selectAll("circle").attr("transform", d => `translate(${(d.x - v[0]) * k + width / 2},${(d.y - v[1]) * k + height / 2})`);
-                svg.selectAll("circle").attr("r", d => d.r * k);
+                svg.selectAll("circle")
+                    .attr("transform", d => `translate(${(d.x - v[0]) * k + width / 2},${(d.y - v[1]) * k + height / 2})`)
+                    .attr("r", d => d.r * k);
+
+                svg.selectAll("text")
+                    .attr("transform", d => `translate(${(d.x - v[0]) * k + width / 2},${(d.y - v[1]) * k + height / 2})`);
             }
-    
-            const root = d3.hierarchy(data)
-                .sum(d => d.value ? d.value : d.children ? d.children.length : 0);
-    
-            const nodes = pack(root).descendants();
-            focus = root;
-            view = [root.x, root.y, root.r * 2];
-    
-            updateYearFilter(uniqueYears[0]); // Load initial data
+
+            function addLabels(nodes, year) {
+                svg.selectAll("text.label")
+                    .data(nodes.filter(d => d.depth === 1 || d.depth === 2))
+                    .enter().append("text")
+                    .attr("class", "label")
+                    .style("fill-opacity", d => d.parent === focus || d === focus ? 1 : 0)
+                    .style("display", d => d.parent === focus || d === focus ? "inline" : "none")
+                    .attr("transform", d => `translate(${d.x},${d.y})`)
+                    .text(d => d.data.name);
+
+                svg.selectAll("text.leaf-label")
+                    .data(nodes.filter(d => d.depth === 3))
+                    .enter().append("text")
+                    .attr("class", "leaf-label")
+                    .style("fill-opacity", 0)
+                    .style("display", "none")
+                    .attr("transform", d => `translate(${d.x},${d.y + 25})`)
+                    .text(d => {
+                        const avg = d.data.year_data?.[year]?.average || 0;
+                        const count = d.data.year_data?.[year]?.count || 0;
+                        const unit = d.data.unit || "N/A";
+                        return `${d.data.name}\nAvg: ${avg.toFixed(2)} ${unit}, Count: ${count}`;
+                    });
+            }
+
+            updateYearFilter(uniqueYears[0]);
         }).catch(error => {
             console.error("Error loading JSON data:", error);
         });
     </script>
-    
 </body>
 </html>
