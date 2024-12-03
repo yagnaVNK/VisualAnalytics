@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>D3 Circle and Stacked Bars with Measure Filter</title>
+    <title>Radial Stacked Bars with Measure Filter</title>
     <script src="https://d3js.org/d3.v6.min.js"></script>
     <style>
         #measure-filter {
@@ -68,6 +68,7 @@
     </style>
 </head>
 <body>
+    <h1>Radial Stacked Bars with Measure Filter</h1>
     <div id="measure-filter">
         <label for="filter-measure">Filter by Measure:</label>
         <select id="filter-measure">
@@ -108,8 +109,8 @@
 
             const unitsByMeasure = getUnitsByMeasure(data);
             const container = d3.select("svg");
-            const containerWidth = window.innerWidth * 0.9;
-            const containerHeight = window.innerHeight * 0.9;
+            const containerWidth = window.innerWidth *1.1 ;
+            const containerHeight = window.innerHeight*1.1 ;
             fitToScreen(container, containerWidth, containerHeight);
 
             const tooltip = d3.select("body").append("div")
