@@ -6,9 +6,47 @@
     <title>D3 Packed Circles with Year Filter</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
-        .body{
-            background-color: #262b2c;
+        #year-filter {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 20px 0;
+        font-family: Arial, sans-serif;
         }
+
+        #year-filter label {
+        font-size: 16px;
+        font-weight: bold;
+        color: #333;
+        margin-right: 10px;
+        }
+
+        #year-filter select {
+        padding: 8px 12px;
+        font-size: 14px;
+        font-family: Arial, sans-serif;
+        color: #333;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        outline: none;
+        background-color: #f9f9f9;
+        transition: all 0.3s ease;
+        }
+
+        #year-filter select:hover {
+        border-color: #007BFF;
+        }
+
+        #year-filter select:focus {
+        border-color: #007BFF;
+        box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        #year-filter select option {
+        padding: 8px;
+        background-color: #fff;
+        }
+
         .tooltip {
             position: absolute;
             text-align: center;
@@ -50,7 +88,8 @@
     
             const svg = d3.select("body").append("svg")
                 .attr("width", width)
-                .attr("height", height);
+                .attr("height", height)
+                .style("background","#FBFBFB");
     
             const tooltip = d3.select("body").append("div")
                 .attr("class", "tooltip")
@@ -108,7 +147,7 @@
                         if (d.depth === 0) return "#E3FEF7"; // Root node
                         if (d.depth === 1) return "#135D66"; // Level 1
                         if (d.depth === 2) return "#77B0AA"; // Level 2
-                        if (d.depth === 3) return "#FBFBFB"; // Level 3 (Leaf nodes)
+                        if (d.depth === 3) return "#D8D9DA"; // Level 3 (Leaf nodes)
                         return "#FFF"; // Default fallback
                     })
                     // .attr("stroke", "#000")
